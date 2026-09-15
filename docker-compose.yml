@@ -44,6 +44,8 @@ services:
       EXPORT_DIR: /app/backend/app/storage/exports
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
       PII_SCRUBBING_ENABLED: ${PII_SCRUBBING_ENABLED:-true}
+      # Alembic owns the schema here; the entrypoint runs `upgrade head`.
+      AUTO_CREATE_TABLES: "false"
       AGENT_MAX_TOOL_CALLS: ${AGENT_MAX_TOOL_CALLS:-25}
       CORS_ORIGINS: http://localhost:8080
       MOM_STT_BACKEND: ${MOM_STT_BACKEND:-baseline}

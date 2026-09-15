@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from backend.app.api.deps import Audit, CurrentUser, DbSession, RequireAdmin
 from backend.app.models import ActorType, Role, User
 from backend.app.schemas import LoginRequest, TokenResponse, UserCreate, UserOut
 from backend.app.security.auth import create_access_token, hash_password, verify_password
+from backend.app.security.ratelimit import (
+    RateLimitExceeded,
+    client_ip,
+    login_account_limiter,
+    login_ip_limiter,
+    register_ip_limiter,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -24,7 +31,9 @@ _DUMMY_HASH = "$2b$12$abcdefghijklmnopqrstuvOe0Q6Zc0N1uVhWxJ5Jz5Y8kLmNqRsTu"
     status_code=status.HTTP_201_CREATED,
     summary="Register a reviewer account",
 )
-def register(payload: UserCreate, db: DbSession, audit: Audit) -> User:
+def register(payload: UserCreate, request: Request, db: DbSession, audit: Audit) -> User:
+    _enforce(register_ip_limiter, client_ip(request), audit, reason="register_rate_limited")
+
     existing = db.query(User).filter(User.email == payload.email.lower()).one_or_none()
     if existing is not None:
         raise HTTPException(
@@ -55,29 +64,35 @@ def register(payload: UserCreate, db: DbSession, audit: Audit) -> User:
 
 
 @router.post("/login", response_model=TokenResponse, summary="Exchange credentials for a JWT")
-def login(payload: LoginRequest, db: DbSession, audit: Audit) -> TokenResponse:
+def login(payload: LoginRequest, request: Request, db: DbSession, audit: Audit) -> TokenResponse:
     started = time.perf_counter()
-    user = db.query(User).filter(User.email == payload.email.lower()).one_or_none()
+    email = payload.email.lower()
+    ip = client_ip(request)
+
+    # Both budgets are checked before any password work: an attacker must not be
+    # able to spend server CPU on bcrypt once they are already blocked.
+    _enforce(login_ip_limiter, ip, audit, reason="login_rate_limited_ip")
+    _enforce(login_account_limiter, email, audit, reason="login_rate_limited_account", email=email)
+
+    user = db.query(User).filter(User.email == email).one_or_none()
 
     if user is None:
         verify_password(payload.password, _DUMMY_HASH)  # constant-ish time
-        audit.record(
-            action="auth.login_failed",
-            actor_type=ActorType.SYSTEM,
+        audit.refusal(
+            "auth.login_failed",
+            ActorType.SYSTEM,
             actor_id=None,
-            outcome="denied",
-            detail={"reason": "unknown_email", "email": payload.email.lower()},
+            detail={"reason": "unknown_email", "email": email},
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password."
         )
 
     if not user.is_active or not verify_password(payload.password, user.hashed_password):
-        audit.record(
-            action="auth.login_failed",
-            actor_type=ActorType.HUMAN,
+        audit.refusal(
+            "auth.login_failed",
+            ActorType.HUMAN,
             actor_id=user.id,
-            outcome="denied",
             resource_type="user",
             resource_id=user.id,
             detail={"reason": "bad_password" if user.is_active else "inactive_account"},
@@ -86,6 +101,10 @@ def login(payload: LoginRequest, db: DbSession, audit: Audit) -> TokenResponse:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password."
         )
+
+    # A successful login clears the account budget, so someone who mistypes twice
+    # and then succeeds is not left one attempt away from a lockout.
+    login_account_limiter.reset(email)
 
     token, expires_in = create_access_token(user.id, user.role, user.email)
     audit.record(
@@ -114,3 +133,30 @@ def me(user: CurrentUser) -> User:
 )
 def list_users(db: DbSession, _: RequireAdmin) -> list[User]:
     return db.query(User).order_by(User.created_at).all()
+
+
+def _enforce(limiter, key: str, audit: Audit, *, reason: str, email: str | None = None) -> None:
+    """Spend one unit of budget, or refuse with 429 and a Retry-After header.
+
+    The refusal is audited: a burst of these is the signal that someone is being
+    attacked, and it is exactly the evidence the threat model asks for.
+    """
+    try:
+        limiter.hit(key)
+    except RateLimitExceeded as exc:
+        audit.refusal(
+            "security.rate_limited",
+            ActorType.SYSTEM,
+            actor_id=None,
+            detail={
+                "reason": reason,
+                "scope": exc.scope,
+                "retry_after": exc.retry_after,
+                **({"email": email} if email else {}),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=("Too many attempts. Please wait before trying again."),
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc

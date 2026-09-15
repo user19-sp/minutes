@@ -32,11 +32,10 @@ def create_job(
     try:
         stored = ingestion.store_upload(file.file, file.filename or "upload", file.content_type)
     except ingestion.UploadRejected as exc:
-        audit.record(
-            action="job.upload_rejected",
-            actor_type=ActorType.HUMAN,
+        audit.refusal(
+            "job.upload_rejected",
+            ActorType.HUMAN,
             actor_id=user.id,
-            outcome="denied",
             detail={
                 "reason": exc.code,
                 "message": str(exc),

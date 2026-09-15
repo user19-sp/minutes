@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from backend.app.agent.audit import AuditLogger
 from backend.app.agent.registry import approval_key
 from backend.app.models import (
+    ActorType,
     ApprovalRequest,
     ApprovalStatus,
     Role,
@@ -131,10 +132,13 @@ def decide_gate(
 ) -> ApprovalRequest:
     """Rule on a gate. Enforces I1, I2 and I3."""
     if user.role not in DECIDING_ROLES:  # I2
-        audit.human(
+        # Independent: the caller turns this into a 403, which rolls the request
+        # back. An attempt to authorise beyond one's role is exactly the kind of
+        # event that must survive that rollback.
+        audit.refusal(
             "gate.decision_forbidden",
-            user_id=user.id,
-            outcome="denied",
+            ActorType.HUMAN,
+            actor_id=user.id,
             job_id=gate.job_id,
             run_id=gate.run_id,
             resource_type="approval_request",

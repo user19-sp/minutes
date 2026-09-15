@@ -51,7 +51,14 @@ def get_db() -> Iterator[Session]:
 
 
 def init_db() -> None:
-    """Create tables. Dev convenience; Alembic owns schema changes in deployment."""
+    """Create tables from ORM metadata.
+
+    Dev and test convenience only. Alembic owns the schema in deployment: see
+    `settings.auto_create_tables`. Running both would let the two drift, with the
+    ORM silently winning at startup and migrations never being exercised.
+    """
     from backend.app import models  # noqa: F401  (register mappers)
 
+    if not settings.auto_create_tables:
+        return
     Base.metadata.create_all(bind=engine)

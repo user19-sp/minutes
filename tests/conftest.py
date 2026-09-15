@@ -45,6 +45,11 @@ from backend.app.db import Base, SessionLocal, engine  # noqa: E402
 from backend.app.main import app  # noqa: E402
 from backend.app.models import Role, User  # noqa: E402
 from backend.app.security.auth import hash_password  # noqa: E402
+from backend.app.security.ratelimit import (  # noqa: E402
+    login_account_limiter,
+    login_ip_limiter,
+    register_ip_limiter,
+)
 
 SAMPLE_MEETING = """Good morning everyone, let us begin the sprint review for the payments module.
 Priya will send the updated API contract to the vendor by Friday.
@@ -90,6 +95,21 @@ def _clean_tables():
         for table in reversed(Base.metadata.sorted_tables):
             db.execute(table.delete())
         db.commit()
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiters():
+    """Rate limiters are process-global singletons.
+
+    Without this, a test that logs in several times would consume budget that a
+    later test needs, and the suite would fail depending on execution order.
+    Tests that exercise the limiter deliberately do so from a clean slate.
+    """
+    for limiter in (login_ip_limiter, login_account_limiter, register_ip_limiter):
+        limiter.clear()
+    yield
+    for limiter in (login_ip_limiter, login_account_limiter, register_ip_limiter):
+        limiter.clear()
 
 
 @pytest.fixture

@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     # Privacy
     pii_scrubbing_enabled: bool = True
 
+    # Schema management
+    # Dev and test create tables directly from the ORM metadata for convenience.
+    # Deployments set this false and run `alembic upgrade head` instead, so schema
+    # changes are versioned and reviewable rather than applied implicitly at
+    # startup. Compose sets it false.
+    auto_create_tables: bool = True
+
     # CORS
     # Held as a raw CSV string: pydantic-settings JSON-decodes complex types
     # straight from the environment, so a plain comma-separated value in .env

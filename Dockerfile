@@ -38,6 +38,10 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app backend/ ./backend/
 COPY --chown=app:app scripts/ ./scripts/
 COPY --chown=app:app fixtures/ ./fixtures/
+COPY --chown=app:app alembic/ ./alembic/
+COPY --chown=app:app alembic.ini ./
+COPY --chown=app:app docker-entrypoint.sh ./
+RUN chmod +x /app/docker-entrypoint.sh
 
 RUN mkdir -p /app/backend/app/storage/uploads /app/backend/app/storage/exports \
  && chown -R app:app /app/backend/app/storage
@@ -48,4 +52,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status == 200 else 1)"
 
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

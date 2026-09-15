@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI):
         gated_tools=sorted(s.name for s in tool_registry.specs() if s.requires_approval),
         pending_approvals=pending,
         pii_scrubbing=settings.pii_scrubbing_enabled,
+        schema_mode="orm_create_all" if settings.auto_create_tables else "alembic",
     )
     yield
     log.info("shutdown")

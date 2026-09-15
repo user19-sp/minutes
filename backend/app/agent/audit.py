@@ -59,9 +59,19 @@ def _sanitise(value: Any, depth: int = 0) -> Any:
 class AuditLogger:
     """Writes audit rows on a caller-supplied session.
 
-    The row is flushed immediately but committed with the caller's transaction, so
-    an audited action and its audit row succeed or fail together. A tool call that
-    rolls back leaves no misleading "it happened" row.
+    Two persistence modes, because success and refusal need opposite guarantees:
+
+    * **Transactional** (default). The row commits with the caller's transaction,
+      so an audited action and its evidence succeed or fail together. A tool call
+      that rolls back leaves no misleading "it happened" row.
+
+    * **Independent** (`independent=True`). The row is written on its own session
+      and committed immediately. Refusal paths need this: they record the event
+      and then raise an HTTPException, which makes the request handler roll back.
+      Under the transactional mode the evidence of the refusal would be destroyed
+      along with the operation it refused -- the exact opposite of what the audit
+      trail is for. A rejected login, a blocked brute-force attempt and a refused
+      upload all *happened*, and must be recorded even though nothing else was.
     """
 
     def __init__(self, db: Session) -> None:
@@ -80,7 +90,22 @@ class AuditLogger:
         run_id: str | None = None,
         detail: dict[str, Any] | None = None,
         duration_ms: float | None = None,
+        independent: bool = False,
     ) -> AuditEvent:
+        if independent:
+            return self._record_independent(
+                action=action,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                outcome=outcome,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                job_id=job_id,
+                run_id=run_id,
+                detail=detail,
+                duration_ms=duration_ms,
+            )
+
         event = AuditEvent(
             action=action,
             actor_type=actor_type,
@@ -109,6 +134,36 @@ class AuditLogger:
             run_id=run_id,
         )
         return event
+
+    def _record_independent(self, **kwargs: Any) -> AuditEvent:
+        """Persist on a fresh session so the row survives the caller's rollback."""
+        from backend.app.db import SessionLocal
+
+        detail = kwargs.pop("detail", None)
+        with SessionLocal() as session:
+            event = AuditEvent(
+                trace_id=trace_id_ctx.get(),
+                detail=_sanitise(detail or {}),
+                **kwargs,
+            )
+            session.add(event)
+            session.commit()
+            session.refresh(event)
+
+        log.info(
+            "audit",
+            audit_action=kwargs.get("action"),
+            actor_type=kwargs["actor_type"].value,
+            actor_id=kwargs.get("actor_id"),
+            outcome=kwargs.get("outcome", "success"),
+            independent=True,
+        )
+        return event
+
+    def refusal(self, action: str, actor_type: ActorType, **kwargs: Any) -> AuditEvent:
+        """Record a refusal. Always independent -- see the class docstring."""
+        kwargs.setdefault("outcome", "denied")
+        return self.record(action=action, actor_type=actor_type, independent=True, **kwargs)
 
     # Convenience wrappers -------------------------------------------------- #
 

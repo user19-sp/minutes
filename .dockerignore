@@ -19,4 +19,5 @@ backend/app/storage/uploads/*
 backend/app/storage/exports/*
 docs/
 tests/
+
 mlruns/
