@@ -264,12 +264,16 @@ credible.
 | R3 | Regex PII detection misses formats | Medium | Heuristic by nature | Trained NER model alongside the patterns |
 | R4 | Injection detection is evadable | Medium | Accepted — the gate is the real control | Adversarial evaluation set; keep gates regardless |
 | R5 | JWTs cannot be revoked before expiry | Medium | Stateless tokens, 60-minute TTL | Refresh tokens + a revocation list |
-| R6 | Runs execute synchronously | Low | Fine at prototype audio lengths | Move behind a queue; the orchestrator is already resumable |
 | R7 | No TLS in the compose stack | Low | Deployment concern | Terminate TLS at the ingress |
 | R8 | Reviewer fatigue / rubber-stamping | Medium | Human factor, not technical | Track approve-without-inspect rate; sample-audit approvals |
 
-R1 is the most serious and should be closed before any deployment beyond the
-prototype.
+**R1 is closed.** Per-IP and per-account sliding-window limiters now sit in front
+of `/auth/login` and `/auth/register`; see `backend/app/security/ratelimit.py` and
+`tests/security/test_rate_limiting.py`. Counters are in-process, so a multi-replica
+deployment would need Redis — that is the remaining piece of R1, not the absence
+of limiting.
+
+**R6 is closed.** Runs execute on a database-backed queue with a worker process.
 
 ## Reviewing this document
 

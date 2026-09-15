@@ -79,6 +79,7 @@ class RunMode(enum.StrEnum):
 
 
 class RunStatus(enum.StrEnum):
+    QUEUED = "queued"
     RUNNING = "running"
     AWAITING_APPROVAL = "awaiting_approval"
     COMPLETED = "completed"
@@ -307,6 +308,16 @@ class AgentRun(Base):
     denied_tool_call_count: Mapped[int] = mapped_column(Integer, default=0)
     plan: Mapped[list] = mapped_column(JSON, default=list)
     error_message: Mapped[str | None] = mapped_column(Text)
+
+    # --- queue bookkeeping ------------------------------------------------ #
+    # The run row IS the queue entry. A separate queue table would be a second
+    # source of truth about the same work, and the two would drift.
+    enable_diarization: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: Set when a worker takes the run; used to detect abandoned work.
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claimed_by: Mapped[str | None] = mapped_column(String(128))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    queued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

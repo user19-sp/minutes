@@ -46,6 +46,9 @@ services:
       PII_SCRUBBING_ENABLED: ${PII_SCRUBBING_ENABLED:-true}
       # Alembic owns the schema here; the entrypoint runs `upgrade head`.
       AUTO_CREATE_TABLES: "false"
+      # Runs go on the queue: real transcription takes minutes and the proxy
+      # would close the connection long before an inline run finished.
+      RUN_EXECUTION: queued
       AGENT_MAX_TOOL_CALLS: ${AGENT_MAX_TOOL_CALLS:-25}
       CORS_ORIGINS: http://localhost:8080
       MOM_STT_BACKEND: ${MOM_STT_BACKEND:-baseline}
@@ -60,6 +63,43 @@ services:
     ports:
       # Exposed so /metrics can be scraped and the API tested directly.
       - "127.0.0.1:8000:8000"
+
+  worker:
+    # Executes queued runs. A separate process from the API on purpose: a long
+    # transcription must not occupy a request handler, and the worker can be
+    # restarted or scaled without touching the API.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+    environment:
+      APP_ENV: docker
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env before starting}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mom}:${POSTGRES_PASSWORD:-mom-dev-password}@db:5432/${POSTGRES_DB:-mom}
+      UPLOAD_DIR: /app/backend/app/storage/uploads
+      EXPORT_DIR: /app/backend/app/storage/exports
+      PII_SCRUBBING_ENABLED: ${PII_SCRUBBING_ENABLED:-true}
+      AGENT_MAX_TOOL_CALLS: ${AGENT_MAX_TOOL_CALLS:-25}
+      # The API container already ran the migrations; the worker must not race it.
+      AUTO_CREATE_TABLES: "false"
+      RUN_EXECUTION: queued
+      MOM_STT_BACKEND: ${MOM_STT_BACKEND:-baseline}
+      MOM_DIARIZER_BACKEND: ${MOM_DIARIZER_BACKEND:-baseline}
+      MOM_SEGMENTER_BACKEND: ${MOM_SEGMENTER_BACKEND:-baseline}
+      MOM_EXTRACTOR_BACKEND: ${MOM_EXTRACTOR_BACKEND:-baseline}
+    volumes:
+      # Shares the upload volume with the API: the worker reads the recording the
+      # API wrote, so both must see the same filesystem.
+      - uploads:/app/backend/app/storage/uploads
+      - exports:/app/backend/app/storage/exports
+    entrypoint: []
+    command: ["python", "-m", "backend.app.worker"]
 
   web:
     build:

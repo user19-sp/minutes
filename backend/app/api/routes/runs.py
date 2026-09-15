@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, HTTPException, Path, Response, status
 
 from backend.app.agent import orchestrator
 from backend.app.agent.registry import registry
@@ -13,6 +13,7 @@ from backend.app.api.deps import Audit, CurrentUser, DbSession, OwnedJob, Requir
 from backend.app.config import settings
 from backend.app.models import AgentRun, JobStatus, RunMode, RunStatus
 from backend.app.schemas import AgentRunOut, RunStartRequest, ToolSpecOut
+from backend.app.services import queue
 
 router = APIRouter(tags=["governance"])
 
@@ -69,6 +70,7 @@ def governance_policy(_: CurrentUser) -> dict:
     response_model=AgentRunOut,
     status_code=status.HTTP_201_CREATED,
     summary="Start an orchestrator run",
+    responses={202: {"description": "Run queued; a worker will execute it."}},
 )
 def start_run(
     job: OwnedJob,
@@ -76,22 +78,40 @@ def start_run(
     db: DbSession,
     user: RequireReviewer,
     audit: Audit,
+    response: Response,
 ) -> AgentRun:
     """Run the pipeline over an uploaded meeting.
 
-    The run executes synchronously: for the prototype's audio lengths this keeps
-    the demo legible (upload, run, gate, review in one sitting) and avoids a worker
-    process the examiner would have to start separately. The orchestrator is
-    already written as a resumable state machine, so moving it behind a queue is a
-    transport change, not a redesign.
+    Two execution modes, chosen by configuration rather than by the caller:
+
+    * **queued** (deployment) -- returns 202 immediately with a QUEUED run and a
+      worker does the slow part. Necessary because real transcription takes
+      minutes and the proxy closes the connection long before that.
+    * **inline** (dev and tests) -- executes here and returns 201 with the
+      finished run, so a test can assert on the outcome without polling.
+
+    Either way the reviewer editor renders the same job states; it polls while a
+    job is queued or running.
     """
-    if job.status in (JobStatus.RUNNING, JobStatus.AWAITING_APPROVAL):
+    if job.status in (JobStatus.RUNNING, JobStatus.AWAITING_APPROVAL, JobStatus.QUEUED):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Job is already {job.status.value}; wait for it to finish or decide its gate.",
         )
 
-    run = orchestrator.start_run(
+    if settings.run_execution == "queued":
+        run = queue.enqueue(
+            db,
+            audit,
+            job=job,
+            actor_id=user.id,
+            mode=payload.mode,
+            enable_diarization=payload.enable_diarization,
+        )
+        response.status_code = status.HTTP_202_ACCEPTED
+        return run
+
+    return orchestrator.start_run(
         db,
         audit,
         job=job,
@@ -99,7 +119,30 @@ def start_run(
         mode=payload.mode,
         enable_diarization=payload.enable_diarization,
     )
-    return run
+
+
+@router.get("/queue", summary="Queue depth and in-flight runs")
+def queue_status(db: DbSession, _: CurrentUser) -> dict:
+    """Operational view of the queue -- what is waiting and what is being worked on."""
+    from backend.app.models import RunStatus as RS
+
+    running = (
+        db.query(AgentRun).filter(AgentRun.status == RS.RUNNING).order_by(AgentRun.claimed_at).all()
+    )
+    return {
+        "execution_mode": settings.run_execution,
+        "queued": queue.depth(db),
+        "running": [
+            {
+                "run_id": r.id,
+                "job_id": r.job_id,
+                "worker": r.claimed_by,
+                "claimed_at": r.claimed_at.isoformat() if r.claimed_at else None,
+                "attempts": r.attempts,
+            }
+            for r in running
+        ],
+    }
 
 
 @router.get(

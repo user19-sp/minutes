@@ -41,6 +41,10 @@ python -m uvicorn backend.app.main:app --reload --port 8000
 cd frontend && npm install && npm run dev
 ```
 
+Locally, runs execute inline (`RUN_EXECUTION=inline`), so no worker is needed.
+Under Docker they go on a queue and a worker container executes them — see
+[Execution modes](#execution-modes).
+
 Open **http://localhost:5173** and sign in:
 
 | Role | Email | Password |
@@ -64,6 +68,28 @@ docker compose exec api python scripts/seed_demo.py
 
 Reviewer editor at **http://localhost:8080**, API docs at **http://localhost:8080/docs**.
 
+Four containers: `db` (PostgreSQL), `api`, `worker` (executes queued runs), `web`
+(nginx serving the SPA and proxying `/api`). Migrations run automatically on API
+startup.
+
+## Execution modes
+
+A run can take minutes once real transcription is enabled, and nginx closes an
+idle connection at 300s. So the pipeline does not execute inside the HTTP request:
+
+| Mode | `POST /runs` returns | Who runs it | Used by |
+|---|---|---|---|
+| `inline` | 201 with the finished run | the request thread | dev, tests |
+| `queued` | **202** with a `queued` run | the worker container | Docker |
+
+Set with `RUN_EXECUTION`. The reviewer editor polls while a job is `queued` or
+`running`, and `GET /api/v1/queue` shows depth and in-flight runs. Execution mode
+is transport only — a test asserts both paths produce identical minutes.
+
+The queue is the database (`agent_runs` rows claimed with `SELECT … FOR UPDATE
+SKIP LOCKED`), not Redis: Postgres is already in the stack and already durable. A
+worker that dies has its lease expire and its run requeued.
+
 ## What to look at first
 
 1. **Upload `fixtures/meetings/04_prompt_injection_planning.txt`** and run the
@@ -79,7 +105,7 @@ Reviewer editor at **http://localhost:8080**, API docs at **http://localhost:808
 ## Testing
 
 ```bash
-pytest tests -q                       # 108 tests
+pytest tests -q                       # 154 tests
 pytest tests/security -q              # 73 security tests
 pytest tests --cov=backend/app        # with coverage
 
@@ -161,6 +187,7 @@ All settings come from the environment; see [`.env.example`](.env.example).
 | `DATABASE_URL` | `sqlite:///./mom.db` | Postgres in compose |
 | `MAX_UPLOAD_MB` | `200` | Enforced while streaming |
 | `AGENT_MAX_TOOL_CALLS` | `25` | Runaway-agent ceiling |
+| `RUN_EXECUTION` | `inline` | `queued` in Docker; see Execution modes |
 | `AGENT_AUTO_APPROVE_THRESHOLD` | `1.01` | Above 1.0 = nothing is ever auto-approved |
 | `PII_SCRUBBING_ENABLED` | `true` | Scrubbing happens before storage |
 
@@ -174,15 +201,17 @@ All settings come from the environment; see [`.env.example`](.env.example).
 
 ## Project status
 
-**Done.** Ingestion, transcript upload, governed orchestrator, allow-list registry,
-approval gates, audit trail, reviewer editor, gated export, PII scrubbing,
-injection defence, observability, Docker, CI, 108 tests.
+**Done.** Ingestion, transcript upload, job queue with a worker, governed
+orchestrator, allow-list registry, approval gates, audit trail, reviewer editor,
+gated export, PII scrubbing, injection defence, login rate limiting, Alembic
+migrations, observability, Docker, CI, 154 tests.
 
 **Person A's half.** Whisper STT, pyannote diarization, embedding segmentation,
 transformer extraction, WER/F1 evaluation dossier, model card.
 
-**Known open risks.** No login rate limiting (R1, highest priority); audit trail
-is append-only by convention, not cryptographically (R2). Full list in the
+**Known open risks.** The audit trail is append-only by convention rather than
+cryptographically (R2), and rate-limit counters are per-process so a multi-replica
+deployment would need Redis. Full list in the
 [threat model](docs/threat-model.md#residual-risks).
 
 ## Licence

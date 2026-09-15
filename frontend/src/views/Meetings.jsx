@@ -187,6 +187,16 @@ function MeetingDetail({ jobId, onError, onNotice, onJobChanged, onDeleted }) {
     load()
   }, [jobId, load])
 
+  // While a run is queued or executing there is nothing to react to, so poll.
+  // Cheap (one request every 2s) and it stops the moment the job settles, so an
+  // idle meeting costs nothing.
+  const inFlight = minutes && ['queued', 'running'].includes(minutes.job.status)
+  useEffect(() => {
+    if (!inFlight) return undefined
+    const timer = setInterval(load, 2000)
+    return () => clearInterval(timer)
+  }, [inFlight, load])
+
   const guard = async (fn, successMessage) => {
     setBusy(true)
     try {
@@ -210,7 +220,7 @@ function MeetingDetail({ jobId, onError, onNotice, onJobChanged, onDeleted }) {
   }
 
   const { job, transcript, agenda_blocks, decisions, action_items, pending_approvals, latest_run } = minutes
-  const canRun = !['running', 'awaiting_approval'].includes(job.status)
+  const canRun = !['queued', 'running', 'awaiting_approval'].includes(job.status)
 
   return (
     <>
@@ -226,6 +236,17 @@ function MeetingDetail({ jobId, onError, onNotice, onJobChanged, onDeleted }) {
 
         {job.error_message && <Banner kind="error">{job.error_message}</Banner>}
 
+        {job.status === 'queued' && (
+          <Banner kind="info">
+            <Spinner label="Queued — waiting for a worker to pick this up." />
+          </Banner>
+        )}
+        {job.status === 'running' && (
+          <Banner kind="info">
+            <Spinner label="Transcribing and extracting. Long recordings take a few minutes." />
+          </Banner>
+        )}
+
         <div className="row">
           <label style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
             <input
@@ -239,9 +260,14 @@ function MeetingDetail({ jobId, onError, onNotice, onJobChanged, onDeleted }) {
           <button
             className="primary"
             disabled={busy || !canRun}
-            onClick={() => guard(() => api.startRun(job.id, 'agent', diarize), 'Run finished.')}
+            onClick={() =>
+              guard(
+                () => api.startRun(job.id, 'agent', diarize),
+                'Pipeline started. This page updates as it progresses.'
+              )
+            }
           >
-            {busy ? 'Running…' : latest_run ? 'Re-run pipeline' : 'Run pipeline'}
+            {busy ? 'Starting…' : latest_run ? 'Re-run pipeline' : 'Run pipeline'}
           </button>
           <button
             disabled={busy || !canRun}

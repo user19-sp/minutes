@@ -62,6 +62,7 @@ from backend.app.observability.metrics import (
     injection_attempts_total,
     pii_redactions_total,
     pipeline_stage_duration_seconds,
+    queue_wait_seconds,
 )
 from backend.app.security import pii
 from backend.app.security.injection import scan
@@ -91,15 +92,21 @@ def start_run(
     mode: RunMode = RunMode.AGENT,
     enable_diarization: bool = False,
 ) -> AgentRun:
-    """Create a run and drive it until it completes, suspends at a gate, or fails."""
-    run = AgentRun(job_id=job.id, mode=mode, status=RunStatus.RUNNING)
+    """Create a run and drive it to completion in the caller's thread.
+
+    The inline path: used by tests, by the dev default, and by anything that
+    wants the result in hand when the call returns. The queued path creates the
+    run separately and a worker calls `execute_run` on it instead.
+    """
+    run = AgentRun(
+        job_id=job.id,
+        mode=mode,
+        status=RunStatus.RUNNING,
+        enable_diarization=enable_diarization,
+    )
     db.add(run)
     db.flush()
 
-    token = run_id_ctx.set(run.id)
-    started = time.perf_counter()
-
-    job.status = JobStatus.RUNNING
     audit.human(
         "run.started",
         user_id=actor_id,
@@ -114,12 +121,36 @@ def start_run(
             "allowed_tools": sorted(AGENT_TOOLS if mode is RunMode.AGENT else PIPELINE_TOOLS),
         },
     )
+    return execute_run(db, audit, job=job, run=run)
+
+
+def execute_run(db: Session, audit: AuditLogger, *, job: Job, run: AgentRun) -> AgentRun:
+    """Drive an existing run until it completes, suspends at a gate, or fails.
+
+    Split out from `start_run` so a worker can execute a run it claimed from the
+    queue: the row already exists and is already marked RUNNING, so re-creating
+    it would duplicate the work and open two gates for one meeting.
+    """
+    token = run_id_ctx.set(run.id)
+    started = time.perf_counter()
+
+    # Record how long the reviewer waited before anything actually began.
+    queued_at = run.queued_at
+    if queued_at is not None:
+        waited = (
+            datetime.now(UTC) - (queued_at if queued_at.tzinfo else queued_at.replace(tzinfo=UTC))
+        ).total_seconds()
+        queue_wait_seconds.labels(mode=run.mode.value).observe(max(0.0, waited))
+
+    run.status = RunStatus.RUNNING
+    job.status = JobStatus.RUNNING
+    db.flush()
 
     try:
-        if mode is RunMode.NO_AGENT:
-            _run_ungoverned(db, audit, job, run, enable_diarization)
+        if run.mode is RunMode.NO_AGENT:
+            _run_ungoverned(db, audit, job, run, run.enable_diarization)
         else:
-            _run_governed(db, audit, job, run, enable_diarization, actor_id)
+            _run_governed(db, audit, job, run, run.enable_diarization)
     except Exception as exc:
         _fail(db, audit, job, run, exc)
     finally:
@@ -245,7 +276,6 @@ def _run_governed(
     job: Job,
     run: AgentRun,
     enable_diarization: bool,
-    actor_id: str,
 ) -> None:
     ctx = _context(db, audit, job, run)
 

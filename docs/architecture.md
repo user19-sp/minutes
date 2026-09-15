@@ -28,7 +28,10 @@ except the ML services, which sit behind contracts Person A implements.
 ## The governed pipeline
 
 ```
-  upload ─→ [transcribe] ─→ [diarize?] ─→ scrub PII ─→ store transcript
+  upload ─→ QUEUE ─→ worker claims ─→ [transcribe] ─→ [diarize?] ─→ scrub PII
+                                                                      │
+                                                                      ▼
+                                                             store transcript
                                                               │
                                                               ▼
                                                       [segment agenda]
@@ -149,6 +152,7 @@ Notable columns:
 | `approval_requests.payload_fingerprint` | Binds a grant to exact arguments (T-03) |
 | `agent_runs.denied_tool_call_count` | Refusals are evidence, so they are counted |
 | `agent_runs.mode` | Separates the two arms of the comparison study |
+| `agent_runs.claimed_by` / `claimed_at` | Queue lease: identifies the worker and detects abandoned runs |
 | `transcripts.pii_redaction_count` | How much was removed before storage |
 
 ## Observability
@@ -171,10 +175,14 @@ comparison study.
         :8080                    :8000                  :5432
    ┌───────────┐  /api proxy  ┌─────────┐          ┌────────────┐
    │   nginx   │ ───────────→ │   api   │ ───────→ │  postgres  │
-   │  (web)    │              │(uvicorn)│          │            │
-   └───────────┘              └─────────┘          └────────────┘
-     SPA static                non-root              not exposed
-                             2 workers                to host
+   │  (web)    │              │(uvicorn)│     ┌──→ │            │
+   └───────────┘              └─────────┘     │    └────────────┘
+     SPA static                non-root       │      not exposed
+                             2 workers   ┌─────────┐   to host
+                                         │ worker  │
+                                         │ (queue) │
+                                         └─────────┘
+                                      claims and runs the pipeline
 ```
 
 nginx reverse-proxies `/api`, so the browser is same-origin and the JWT never
@@ -183,10 +191,18 @@ published to the host.
 
 ## Deliberate trade-offs
 
-**Synchronous runs.** At prototype audio lengths this keeps the demo legible —
-upload, run, gate, review in one sitting — and avoids a worker the examiner must
-start separately. The resumable state machine means a queue can be added later
-without redesign. *(Residual risk R6.)*
+**Queued runs, with an inline mode for tests.** `POST /runs` enqueues and returns
+202; a worker container claims the run and executes it. Real transcription takes
+minutes and nginx closes the connection at 300s, so an inline run would fail on
+exactly the realistic input a demo needs. Dev and tests keep `RUN_EXECUTION=inline`
+so a test can assert on a finished run without polling — execution mode is
+transport, and a test asserts both paths produce identical minutes.
+
+The queue is the database, not Redis: `agent_runs` is already durable and already
+carries mode, status and the audit correlation id, and a broker would add a
+service and a failure mode for work measured in jobs per hour. Claiming uses
+`SELECT … FOR UPDATE SKIP LOCKED` on PostgreSQL. A worker that dies mid-run has
+its lease expire and the run requeued, up to a retry ceiling.
 
 **SQLite in dev, Postgres in deployment.** Same SQLAlchemy models, switched by
 `DATABASE_URL`. Lets the project run with no Docker installed. CI runs the full

@@ -87,6 +87,31 @@ approval_wait_seconds = Histogram(
 
 pending_approvals = Gauge("pending_approvals", "Approval gates currently awaiting a human.")
 
+# --------------------------------------------------------------------------- #
+# Job queue
+# --------------------------------------------------------------------------- #
+
+queue_depth = Gauge("queue_depth", "Runs waiting to be picked up by a worker.")
+
+queue_runs_total = Counter(
+    "queue_runs_total",
+    "Queued run lifecycle events.",
+    ["mode", "outcome"],  # enqueued | completed | failed | requeued | abandoned
+)
+
+queue_claim_latency_seconds = Histogram(
+    "queue_claim_latency_seconds",
+    "Time a worker spent claiming a run from the queue.",
+    buckets=(0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0),
+)
+
+queue_wait_seconds = Histogram(
+    "queue_wait_seconds",
+    "Time a run waited in the queue before a worker started it.",
+    ["mode"],
+    buckets=(0.5, 1, 5, 15, 60, 300, 900),
+)
+
 injection_attempts_total = Counter(
     "injection_attempts_total",
     "Prompt-injection patterns detected in untrusted content.",

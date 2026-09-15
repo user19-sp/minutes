@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,6 +34,13 @@ class Settings(BaseSettings):
     upload_dir: Path = PROJECT_ROOT / "backend" / "app" / "storage" / "uploads"
     export_dir: Path = PROJECT_ROOT / "backend" / "app" / "storage" / "exports"
     max_upload_mb: int = 200
+
+    # Execution
+    # "inline" runs the pipeline inside the HTTP request -- simple, and correct
+    # while the baseline STT is instant. "queued" hands the run to a worker and
+    # returns immediately, which is required once real transcription takes
+    # minutes and the proxy would time the request out. Compose uses "queued".
+    run_execution: Literal["inline", "queued"] = "inline"
 
     # Governance
     agent_max_tool_calls: int = 25
