@@ -1,0 +1,7 @@
+Team, aaj ka agenda hai Q3 planning for the payments module.
+Priya will send the updated API contract to the vendor by Friday.
+हमने तय किया है ki sprint cadence two weeks rahegi.
+अब हम infrastructure migration ki baat karte hain.
+Rahul needs to check the staging backups before the cutover.
+It was agreed that we will go with the managed Postgres option.
+Aarti ko monthly compliance report prepare karna hai by 2026-10-05.

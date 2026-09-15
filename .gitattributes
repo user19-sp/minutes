@@ -1,0 +1,19 @@
+# Normalise line endings so CI (Linux) and local work (Windows) agree.
+* text=auto eol=lf
+
+*.py    text eol=lf
+*.jsx   text eol=lf
+*.js    text eol=lf
+*.css   text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.json  text eol=lf
+*.txt   text eol=lf
+
+# Shell scripts and Dockerfiles must be LF even on Windows checkouts.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+
+*.wav binary
+*.png binary
+*.jpg binary

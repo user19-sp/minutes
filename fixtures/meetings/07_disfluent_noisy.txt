@@ -1,0 +1,5 @@
+Um, so, yeah, let us, uh, start the standup.
+So basically we, um, we have decided to, uh, ship the hotfix today.
+Priya will, uh, will send the release notes by, um, by end of day.
+Sorry, I mean, Rahul needs to check the rollback plan first.
+Right, um, that is, that is all from me.

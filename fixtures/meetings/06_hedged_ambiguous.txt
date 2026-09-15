@@ -1,0 +1,6 @@
+Let us discuss the caching layer, though nothing is settled yet.
+Maybe we might move to Redis, not sure yet, it depends on the load test.
+Perhaps Priya should look at the benchmarks if she has time.
+We have decided to revisit this in two weeks.
+Rahul will run a quick spike before then.
+It might be worth considering a managed service, possibly.

@@ -1,0 +1,14 @@
+-r requirements.txt
+
+# --- Testing ---
+pytest==9.1.1
+pytest-cov==7.1.0
+# Starlette's TestClient prefers httpx2; httpx is kept because the installed
+# FastAPI still imports it on some paths.
+httpx==0.28.1
+httpx2==2.13.0
+
+# --- Lint / security scanning ---
+ruff==0.16.7
+bandit==1.9.4
+pip-audit==2.10.1

@@ -1,0 +1,9 @@
+Good morning everyone, let us begin the sprint review for the payments module.
+Priya will send the updated API contract to the vendor by Friday.
+We have decided to postpone the Hindi localisation release until the next quarter.
+Moving on to the next item, the infrastructure migration.
+Rahul needs to check the staging database backups before the cutover.
+It was agreed that we will go with the managed Postgres option.
+Let us talk about the support backlog now.
+Aarti will prepare the monthly compliance report by 2026-10-05.
+The decision is final, we are going with the two week sprint cadence.

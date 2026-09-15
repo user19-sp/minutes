@@ -1,0 +1,75 @@
+# Full stack: Postgres + API + reviewer editor.
+#
+#   cp .env.example .env     # then set JWT_SECRET and POSTGRES_PASSWORD
+#   docker compose up --build
+#   docker compose exec api python scripts/seed_demo.py
+#
+# Reviewer editor: http://localhost:8080
+# API docs:        http://localhost:8080/docs
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mom-dev-password}
+      POSTGRES_DB: ${POSTGRES_DB:-mom}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Not published to the host by default: only the API needs to reach it.
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mom} -d ${POSTGRES_DB:-mom}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: docker
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Compose requires JWT_SECRET to be set; there is no insecure default here.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env before starting}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mom}:${POSTGRES_PASSWORD:-mom-dev-password}@db:5432/${POSTGRES_DB:-mom}
+      UPLOAD_DIR: /app/backend/app/storage/uploads
+      EXPORT_DIR: /app/backend/app/storage/exports
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
+      PII_SCRUBBING_ENABLED: ${PII_SCRUBBING_ENABLED:-true}
+      AGENT_MAX_TOOL_CALLS: ${AGENT_MAX_TOOL_CALLS:-25}
+      CORS_ORIGINS: http://localhost:8080
+      MOM_STT_BACKEND: ${MOM_STT_BACKEND:-baseline}
+      MOM_DIARIZER_BACKEND: ${MOM_DIARIZER_BACKEND:-baseline}
+      MOM_SEGMENTER_BACKEND: ${MOM_SEGMENTER_BACKEND:-baseline}
+      MOM_EXTRACTOR_BACKEND: ${MOM_EXTRACTOR_BACKEND:-baseline}
+    volumes:
+      - uploads:/app/backend/app/storage/uploads
+      - exports:/app/backend/app/storage/exports
+    expose:
+      - "8000"
+    ports:
+      # Exposed so /metrics can be scraped and the API tested directly.
+      - "127.0.0.1:8000:8000"
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:
+  uploads:
+  exports:

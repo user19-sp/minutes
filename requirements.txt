@@ -1,0 +1,24 @@
+# Pins are exact for reproducibility. Refresh them with `pip-audit -r requirements.txt`
+# whenever CI flags a CVE; the security job fails the build on any known advisory.
+
+# --- API / runtime ---
+fastapi==0.141.1
+starlette==1.6.0
+uvicorn[standard]==0.53.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-multipart==0.0.32
+
+# --- Database ---
+SQLAlchemy==2.0.53
+alembic==1.20.0
+psycopg[binary]==3.3.5
+
+# --- Auth / security ---
+PyJWT==2.14.0
+email-validator==2.3.0
+bcrypt==5.0.0
+
+# --- Observability ---
+structlog==26.1.0
+prometheus-client==0.26.0

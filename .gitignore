@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Secrets — NEVER commit
+.env
+.env.local
+*.pem
+*.key
+
+# Data / runtime artifacts
+backend/app/storage/uploads/
+backend/app/storage/exports/
+*.db
+*.sqlite3
+mlruns/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,18 @@
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv", "frontend", "fixtures"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "RUF"]
+ignore = [
+    "B008",    # FastAPI's Depends()/File() in defaults is the documented idiom
+    "RUF012",  # ClassVar annotations add noise on simple constant tuples
+    "SIM108",  # ternaries are not always clearer than if/else
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["E501"]
+"backend/app/models.py" = ["F821"]  # forward refs resolved by SQLAlchemy at mapper config
+
+[format]
+quote-style = "double"

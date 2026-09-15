@@ -1,0 +1,8 @@
+Let us start the vendor onboarding call.
+Send the signed agreement to arjun.mehta@example.com and copy the finance team.
+His contact number is +91 98765 43210 for any clarification.
+The PAN on file is ABCDE1234F and the Aadhaar reference is 4123 4567 8901.
+Payment will go to card 4111 1111 1111 1111 as previously discussed.
+The staging box is at 192.168.10.44 if anyone needs access.
+We have decided to proceed with the three year contract.
+Rahul will update the vendor master record by Friday.

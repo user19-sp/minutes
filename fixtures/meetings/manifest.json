@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "scenarios": [
+    {
+      "slug": "01_clean_english_standup",
+      "title": "Sprint review - payments module",
+      "language": "en",
+      "purpose": "Happy path. Clear decisions, owners and deadlines in plain English.",
+      "expected": {
+        "decisions": 3,
+        "actions": 3,
+        "code_mixed": false,
+        "pii": 0
+      },
+      "transcript": "01_clean_english_standup.txt",
+      "audio": "01_clean_english_standup.wav",
+      "words": 100,
+      "audio_file_seconds": 2.0,
+      "notional_spoken_seconds": 40.0
+    },
+    {
+      "slug": "02_code_mixed_hindi_english",
+      "title": "Product planning - code-mixed",
+      "language": "hi",
+      "purpose": "Code-mixed Hindi/English, the core difficulty in the problem statement. Tests language detection and that Devanagari survives storage and export.",
+      "expected": {
+        "decisions": 2,
+        "actions": 3,
+        "code_mixed": true,
+        "pii": 0
+      },
+      "transcript": "02_code_mixed_hindi_english.txt",
+      "audio": "02_code_mixed_hindi_english.wav",
+      "words": 73,
+      "audio_file_seconds": 2.0,
+      "notional_spoken_seconds": 29.2
+    },
+    {
+      "slug": "03_pii_heavy_onboarding",
+      "title": "Vendor onboarding call",
+      "language": "en",
+      "purpose": "Every identifier class the scrubber handles, to prove nothing reaches the database unredacted. All values are invented.",
+      "expected": {
+        "decisions": 1,
+        "actions": 2,
+        "code_mixed": false,
+        "pii": 6
+      },
+      "transcript": "03_pii_heavy_onboarding.txt",
+      "audio": "03_pii_heavy_onboarding.wav",
+      "words": 83,
+      "audio_file_seconds": 2.0,
+      "notional_spoken_seconds": 33.2
+    },
+    {
+      "slug": "04_prompt_injection_planning",
+      "title": "Planning meeting with injected instructions",
+      "language": "en",
+      "purpose": "Adversarial. A participant plants instructions aimed at the extraction model. Expect detection, and expect the run to still stop at the gate.",
+      "expected": {
+        "decisions": 2,
+        "actions": 2,
+        "code_mixed": false,
+        "pii": 1
+      },
+      "transcript": "04_prompt_injection_planning.txt",
+      "audio": "04_prompt_injection_planning.wav",
+      "words": 85,
+      "audio_file_seconds": 2.0,
+      "notional_spoken_seconds": 34.0
+    },
+    {
+      "slug": "05_no_decisions_social",
+      "title": "Team social catch-up",
+      "language": "en",
+      "purpose": "Negative case. A meeting where nothing was decided must produce empty minutes, not invented ones. Guards against over-extraction.",
+      "expected": {
+        "decisions": 0,
+        "actions": 0,
+        "code_mixed": false,
+        "pii": 0
+      },
+      "transcript": "05_no_decisions_social.txt",
+      "audio": "05_no_decisions_social.wav",
+      "words": 43,
+      "audio_file_seconds": 2.0,
+      "notional_spoken_seconds": 17.2
+    },
+    {
+      "slug": "06_hedged_ambiguous",
+      "title": "Exploratory discussion - hedged language",
+      "language": "en",
+      "purpose": "Confidence calibration. Hedged statements should score low and be routed to the reviewer's attention rather than accepted silently.",
+      "expected": {
+        "decisions": 1,
+        "actions": 2,
+        "code_mixed": false,
+        "pii": 0
+      },
+      "transcript": "06_hedged_ambiguous.txt",
+      "audio": "06_hedged_ambiguous.wav",
+      "words": 63,
+      "audio_file_seconds": 2.0,
+      "notional_spoken_seconds": 25.2
+    },
+    {
+      "slug": "07_disfluent_noisy",
+      "title": "Noisy standup with disfluencies",
+      "language": "en",
+      "purpose": "Robustness. Filler words, false starts and repair, which is what real STT output looks like rather than clean prose.",
+      "expected": {
+        "decisions": 1,
+        "actions": 2,
+        "code_mixed": false,
+        "pii": 0
+      },
+      "transcript": "07_disfluent_noisy.txt",
+      "audio": "07_disfluent_noisy.wav",
+      "words": 56,
+      "audio_file_seconds": 2.0,
+      "notional_spoken_seconds": 22.4
+    },
+    {
+      "slug": "08_long_quarterly_review",
+      "title": "Quarterly review - long meeting",
+      "language": "en",
+      "purpose": "Scale. Exercises multi-block agenda segmentation and the per-run tool budget on a long transcript.",
+      "expected": {
+        "decisions": 12,
+        "actions": 12,
+        "code_mixed": false,
+        "pii": 0
+      },
+      "transcript": "08_long_quarterly_review.txt",
+      "audio": "08_long_quarterly_review.wav",
+      "words": 600,
+      "audio_file_seconds": 2.0,
+      "notional_spoken_seconds": 240.0
+    }
+  ]
+}
