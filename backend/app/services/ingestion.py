@@ -25,7 +25,7 @@ import re
 import shutil
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import BinaryIO
 
 from backend.app.config import settings
@@ -113,13 +113,23 @@ def sanitise_filename(name: str) -> str:
     """Reduce a client-supplied name to something safe to echo back and log.
 
     The result is never used as the storage path -- see `store_upload`.
+
+    `PureWindowsPath` rather than `Path`, deliberately: it treats both forward
+    and back slashes as separators on every host, whereas `Path` on Linux treats
+    a backslash as an ordinary character. The server runs on Linux and the
+    clients run on Windows, so a Windows-style path in a filename would keep its
+    directory part on the server and only be defanged by the character filter
+    below. Parsing the client's path with the client's semantics is correct.
     """
-    base = Path(name or "upload").name  # strips any directory component
+    base = PureWindowsPath(name or "upload").name  # strips any directory component
     base = SAFE_NAME.sub("_", base).lstrip(".") or "upload"
+    # Defence in depth: nothing that reads as a traversal should survive, even
+    # though the generated storage path already makes traversal impossible.
+    base = base.replace("..", "_")
     stem, _, _ext = base.rpartition(".")
     if (stem or base).upper() in WINDOWS_RESERVED:
         base = f"file_{base}"
-    return base[:255]
+    return base[:255] or "upload"
 
 
 def validate_extension(filename: str) -> tuple[str, str]:
