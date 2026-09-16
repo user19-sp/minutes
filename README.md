@@ -17,7 +17,7 @@ contracts in [`backend/app/ml/base.py`](backend/app/ml/base.py).
 
 | Half | State |
 |---|---|
-| **Person B** — platform, governance, DevOps | ✅ complete, CI green, 177 tests |
+| **Person B** — platform, governance, DevOps | ✅ complete, CI green, 180 tests |
 | **Person A** — STT, diarization, segmentation, extraction | ⬜ not yet integrated |
 | **Shared** — end-to-end integration testing | ⬜ blocked on Person A |
 
@@ -28,7 +28,7 @@ real, working extractor, and the control arm for the required baseline compariso
 
 ## Run it
 
-Needs **Python 3.11+** and **Node 20+**. Commands below are Windows PowerShell;
+Needs **Python 3.11+** and **Node 20+**. Commands are Windows PowerShell;
 macOS/Linux differences are noted inline.
 
 ### Step 1 — set up (once)
@@ -38,7 +38,7 @@ git clone https://github.com/user19-sp/minutes.git
 cd minutes
 
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1        # macOS/Linux: source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1         # macOS/Linux: source .venv/bin/activate
 
 pip install -r requirements-dev.txt
 copy .env.example .env               # macOS/Linux: cp .env.example .env
@@ -59,7 +59,7 @@ the backend and database work.
 python -m uvicorn backend.app.main:app --reload --port 8000
 ```
 
-Leave it running. Check http://localhost:8000/health — it should say `"status":"ok"`.
+Leave it running. http://localhost:8000/health should say `"status":"ok"`.
 
 ### Step 3 — start the UI
 
@@ -71,8 +71,7 @@ npm install
 npm run dev
 ```
 
-> Run these as three separate lines. `&&` is a syntax error in Windows
-> PowerShell 5.1.
+> Three separate lines. `&&` is a syntax error in Windows PowerShell 5.1.
 
 ### Step 4 — open it
 
@@ -86,8 +85,7 @@ npm run dev
 
 Demo credentials only; `seed_demo.py` never runs in a real deployment.
 
-You should see one meeting, *"Demo - Q3 planning standup"*, sitting at an amber
-approval gate.
+You should see one meeting, *"Demo - Q3 planning standup"*, at an amber approval gate.
 
 ### If something breaks
 
@@ -98,7 +96,7 @@ approval gate.
 | `Activate.ps1 cannot be loaded` | Run `Set-ExecutionPolicy -Scope Process RemoteSigned` first. |
 | UI loads but every request fails | Terminal 1 died. The UI proxies to :8000. |
 | `port 8000 already in use` | An old server is still running. Close it, or use `--port 8001`. |
-| Login says *"Too many attempts"* | Repeated *failures* tripped the limiter. Successful attempts are refunded. Wait 15 min or restart the API. |
+| Login says *"Too many attempts"* | Repeated **failures** tripped the limiter; successes are refunded. Wait 15 min or restart the API. |
 | Register says *"not approved"* | Working as intended. Add the address in the Admin tab. |
 
 ### Docker (alternative — skips all of the above)
@@ -122,14 +120,14 @@ Migrations run automatically. Compose refuses to start without a real
 deployment with no public signup, so the code enforces it: only addresses an
 administrator has approved may create an account.
 
-* **Admin → Admin tab** manages the allow-list. Add an address, and that person
-  can register; remove it, and they cannot. Removing an address does **not**
-  disable an account already created with it — deactivate the user for that.
-* Anyone else attempting to register gets *"That email address is not approved for
-  registration."* Refusals are audited (`registration.refused`).
+* **Admin → Admin tab** manages the allow-list. Add an address and that person can
+  register; remove it and they cannot. Removing an address does **not** disable an
+  account already created with it — deactivate the user for that.
+* Anyone else gets *"That email address is not approved for registration."*
+  Refusals are audited (`registration.refused`).
 * **"Explore the demo →"** signs you into the seeded reviewer account without
   registering. It only appears when that account exists, so a fresh database never
-  offers a login that cannot work. `DEMO_MODE=false` removes it entirely.
+  offers a login that cannot work. `DEMO_MODE=false` removes it.
 * `REGISTRATION_MODE=open` restores self-service signup without emptying the list.
 
 Worth demonstrating, because it takes four clicks: register an unapproved address
@@ -152,25 +150,71 @@ removed. Minutes appear instantly, no gate. That contrast is the comparison stud
 
 ---
 
+## What it accepts
+
+| Kind | Extensions | Limit |
+|---|---|---|
+| Audio | `.wav .mp3 .m4a .mp4 .flac .ogg .opus .webm .aac` | 200 MB |
+| Transcript | `.txt .vtt .md` | 5 MB |
+
+A transcript skips the speech-to-text stage; everything after it is identical.
+Files are validated by **content**, not extension — an `.exe` renamed `.wav` is
+rejected by magic-byte check, a PNG renamed `.txt` because it is not valid UTF-8.
+The client filename never touches the filesystem; storage uses a generated UUID.
+
+Until Person A's Whisper lands, audio uploads produce a clearly-labelled
+`[NO TRANSCRIPT AVAILABLE]` placeholder rather than invented content — so **use the
+`.txt` fixtures for demos today.**
+
+---
+
 ## Testing
 
-```bash
-pytest tests -q                       # 177 tests
-ruff check . && ruff format --check . # lint
-bandit -r backend scripts -ll         # static analysis
-pip-audit -r requirements.txt         # dependency CVEs
+```powershell
+pytest tests -q                        # 180 tests
+ruff check . ; ruff format --check .   # lint
+bandit -r backend scripts -ll          # static analysis
+pip-audit -r requirements.txt          # dependency CVEs
 python scripts/loadtest.py --scenario overhead   # governance overhead, measured
 ```
 
-CI runs all of the above on every push, against **both SQLite and PostgreSQL**,
-plus a Docker image build and smoke test.
+CI runs all of it on every push, against **both SQLite and PostgreSQL**, plus a
+Docker image build and smoke test.
 
 ---
 
 ## For Person A — what to attach
 
-Your four files **already exist** with the contract documented inside each. Fill
-in the bodies; don't change the signatures.
+**The platform does not call your models directly.** It calls four interfaces
+(`Protocol`s) describing what they must *return* — which is why the backend could
+be built before your code existed, and why none of your work is wasted. A
+rule-based stand-in currently satisfies those interfaces; your models replace it
+via one environment variable.
+
+### Start here
+
+```powershell
+git clone https://github.com/user19-sp/minutes.git
+cd minutes
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+copy .env.example .env
+python scripts/make_fixtures.py
+pytest tests -q            # 180 should pass BEFORE you change anything
+```
+
+If those 180 pass, your environment is fine and any later failure is your code,
+not your setup. Worth an hour of not wondering.
+
+Then read two files: [`backend/app/ml/base.py`](backend/app/ml/base.py) — the
+contract — and [`backend/app/ml/baseline.py`](backend/app/ml/baseline.py), a
+working implementation of all four, so you can see the shape.
+
+### Your four files
+
+They **already exist**, with the contract documented inside each. Fill in the
+bodies; don't change the signatures.
 
 | File | Implement | Must return |
 |---|---|---|
@@ -179,31 +223,50 @@ in the bodies; don't change the signatures.
 | `backend/app/ml/embedding_segmenter.py` | `EmbeddingAgendaSegmenter.segment()` | `SegmentationResult` — contiguous `AgendaBlockResult`s with real `confidence` |
 | `backend/app/ml/transformer_extractor.py` | `TransformerExtractor.extract()` | `ExtractionResult` — decisions and actions, each with `evidence_quote` + `confidence` |
 
-The interface is [`backend/app/ml/base.py`](backend/app/ml/base.py). Enable with:
-
-```bash
-MOM_STT_BACKEND=whisper
-MOM_DIARIZER_BACKEND=pyannote
-MOM_SEGMENTER_BACKEND=embedding
-MOM_EXTRACTOR_BACKEND=transformer
-```
-
-**Three things the platform enforces — tests will fail otherwise:**
+### Three things the platform enforces — tests fail otherwise
 
 1. **`evidence_quote` must appear verbatim in the transcript.** It is the
-   anti-hallucination control. If you can't point at the words, don't emit the item.
+   anti-hallucination control. If you cannot point at the words, do not emit the item.
 2. **`confidence` must be calibrated.** Hedged statements must score lower than firm
    ones — the reviewer UI colours low confidence amber so attention goes there.
 3. **`model_name` must be set.** Every item is traced to the model that produced it.
 
-Also note: transcripts arrive **already PII-scrubbed**, so `[REDACTED:EMAIL]`
+Also: transcripts arrive **already PII-scrubbed**, so `[REDACTED:EMAIL]`
 placeholders will be in the text. An action whose owner was redacted should have
 `owner_name=None`, not the placeholder.
 
-Backends load lazily, so a missing dependency falls back to the baseline with a
-loud log line rather than taking the API down. `backend/app/ml/baseline.py` is not
-scaffolding — it's the rule-based **baseline arm** the acceptance checklist
-requires, and stays as the control once your models land.
+### Working and handing back
+
+Enable one backend at a time and let the existing suite check your contract:
+
+```powershell
+$env:MOM_EXTRACTOR_BACKEND="transformer"; pytest tests -q
+```
+
+The four switches are `MOM_STT_BACKEND=whisper`, `MOM_DIARIZER_BACKEND=pyannote`,
+`MOM_SEGMENTER_BACKEND=embedding`, `MOM_EXTRACTOR_BACKEND=transformer`. Backends
+load lazily, so a missing dependency falls back to the baseline with a loud log
+line rather than taking the API down.
+
+Then push a branch and we integration-test together:
+
+```powershell
+git checkout -b person-a-models
+git push -u origin person-a-models
+```
+
+**One question to answer early:** does anything you are building need to search
+*across* meetings, or is it all within a single transcript? Segmentation within one
+transcript needs no vector store; retrieval across meetings does. Your answer
+decides whether Chroma/Qdrant joins the stack.
+
+If the contract genuinely does not fit your approach, say so rather than bending
+your models around it — the blueprint puts data contracts on Person B *"with
+Person A input"*, so it can change.
+
+`backend/app/ml/baseline.py` is not scaffolding, incidentally — it is the
+rule-based **baseline arm** the acceptance checklist requires, and stays as the
+control once your models land.
 
 ---
 
@@ -212,7 +275,7 @@ requires, and stays as the control once your models land.
 | # | Item | Owner |
 |---|---|---|
 | 1 | The four ML modules above | **Person A** |
-| 2 | Vector store (Chroma/Qdrant) — only needed if segmentation uses embeddings | decided by A, built by B |
+| 2 | Vector store — only if anything searches across meetings | decided by A, built by B |
 | 3 | End-to-end integration testing once A's code lands | **Both** |
 | 4 | Problem brief, personas, misuse cases, backlog | **Both** |
 | 5 | Work-log evidence (~100 h each) | **Each individually** |
@@ -241,8 +304,6 @@ storage, not at display time.
 
 All settings come from the environment — see [`.env.example`](.env.example).
 `.env` is gitignored and CI fails the build if one is ever committed.
-
-Worth knowing:
 
 | Variable | Default | Effect |
 |---|---|---|
