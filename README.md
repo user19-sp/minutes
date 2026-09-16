@@ -28,38 +28,83 @@ real, working extractor, and the control arm for the required baseline compariso
 
 ## Run it
 
-Needs **Python 3.11+** and **Node 20+**.
+Needs **Python 3.11+** and **Node 20+**. Commands below are Windows PowerShell;
+macOS/Linux differences are noted inline.
 
-```bash
+### Step 1 — set up (once)
+
+```powershell
+git clone https://github.com/user19-sp/minutes.git
+cd minutes
+
 python -m venv .venv
-.venv\Scripts\activate              # Windows  (source .venv/bin/activate elsewhere)
+.\.venv\Scripts\Activate.ps1        # macOS/Linux: source .venv/bin/activate
+
 pip install -r requirements-dev.txt
-cp .env.example .env
+copy .env.example .env               # macOS/Linux: cp .env.example .env
 
-python scripts/make_fixtures.py     # synthetic meeting corpus
-python scripts/seed_demo.py         # demo accounts + a meeting waiting at a gate
+python scripts/make_fixtures.py      # generates the synthetic meeting corpus
+python scripts/seed_demo.py          # demo accounts + a meeting waiting at a gate
 ```
 
-Two terminals:
+`seed_demo.py` should end by printing three demo logins and a job id. If it does,
+the backend and database work.
 
-```bash
-python -m uvicorn backend.app.main:app --reload --port 8000   # API  → :8000/docs
-cd frontend && npm install && npm run dev                     # UI   → :5173
+### Step 2 — start the API
+
+**Terminal 1**, from the project root:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn backend.app.main:app --reload --port 8000
 ```
 
-Sign in at **http://localhost:5173** as `reviewer@example.com` / `reviewer-demo-password`
-(also `admin@…` and `viewer@…`, same pattern). Demo credentials only.
+Leave it running. Check http://localhost:8000/health — it should say `"status":"ok"`.
 
-### Docker
+### Step 3 — start the UI
 
-```bash
-cp .env.example .env    # set JWT_SECRET and POSTGRES_PASSWORD — compose refuses without them
+**Terminal 2** — a second window; the first one is still busy:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+> Run these as three separate lines. `&&` is a syntax error in Windows
+> PowerShell 5.1.
+
+### Step 4 — open it
+
+**http://localhost:5173** — sign in as `reviewer@example.com` /
+`reviewer-demo-password` (also `admin@…` and `viewer@…`). Demo credentials only.
+
+You should see one meeting, *"Demo - Q3 planning standup"*, sitting at an amber
+approval gate.
+
+### If something breaks
+
+| Symptom | Cause |
+|---|---|
+| `&&` → *"not a valid statement separator"* | PowerShell 5.1. Run the lines separately. |
+| `cp` not recognised | You are in `cmd.exe`. Use `copy`, or switch to PowerShell. |
+| `Activate.ps1 cannot be loaded` | Run `Set-ExecutionPolicy -Scope Process RemoteSigned` first. |
+| UI loads but every request fails | Terminal 1 died. The UI proxies to :8000. |
+| `port 8000 already in use` | An old server is still running. Close it, or use `--port 8001`. |
+| Login says *"Too many attempts"* | Rate limiter tripped. Wait 15 min, or restart the API to clear it. |
+
+### Docker (alternative — skips all of the above)
+
+```powershell
+copy .env.example .env    # then set JWT_SECRET and POSTGRES_PASSWORD inside it
 docker compose up --build
 docker compose exec api python scripts/seed_demo.py
 ```
 
 → **http://localhost:8080**. Four containers: `db`, `api`, `worker`, `web`.
-Migrations run automatically on startup.
+Migrations run automatically. Compose refuses to start without a real
+`JWT_SECRET` — generate one with
+`python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
 ---
 
