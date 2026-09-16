@@ -10,9 +10,12 @@ Two independent limiters, because they stop different attacks:
     with many IPs slips past a per-IP limit entirely, so the account itself also
     has a budget, and exhausting it locks the account briefly regardless of source.
 
-A failed attempt counts against both. A *successful* login clears the account's
-counter, so a legitimate user who mistypes twice and then succeeds is not left
-one attempt from a lockout.
+**Only failures should cost you.** A successful attempt clears the counters it
+would otherwise have consumed. This matters more than it sounds: a limiter that
+charges for success punishes exactly the people it is meant to protect -- an
+admin onboarding six colleagues in a morning, or a demo signing in as three
+different roles in a row. Attackers are distinguished by *failing repeatedly*,
+which is what the budget is actually measuring.
 
 Storage is in-process, which is honest about what this is: correct for the
 single-instance prototype, and wrong the moment there are two API replicas, since
@@ -161,10 +164,11 @@ class RateLimiter:
 # Configured limiters
 # --------------------------------------------------------------------------- #
 
-#: One host, many attempts. Generous enough for a shared office NAT, tight
-#: enough that guessing is impractical.
+#: One host, many *failed* attempts. Generous enough for a shared office NAT and
+#: for a demo cycling through roles; tight enough that guessing is impractical.
+#: Successful logins are cleared, so only failures accumulate here.
 login_ip_limiter = RateLimiter(
-    max_attempts=10,
+    max_attempts=20,
     window_seconds=300,
     block_seconds=900,
     name="login-ip",
@@ -178,11 +182,15 @@ login_account_limiter = RateLimiter(
     name="login-account",
 )
 
-#: Registration, to stop automated account creation.
+#: Registration. The registration allow-list is now the real control over who
+#: gets an account, so this exists to stop someone hammering the endpoint to
+#: discover *which* addresses are approved. Successful registrations are cleared,
+#: so an admin onboarding a team does not lock themselves out -- only refusals
+#: accumulate. The block is short for the same reason.
 register_ip_limiter = RateLimiter(
-    max_attempts=5,
-    window_seconds=3600,
-    block_seconds=3600,
+    max_attempts=20,
+    window_seconds=900,
+    block_seconds=900,
     name="register-ip",
 )
 

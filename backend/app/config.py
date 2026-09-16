@@ -48,6 +48,22 @@ class Settings(BaseSettings):
     # Default > 1.0 means "nothing is ever auto-approved" — the safe default.
     agent_auto_approve_threshold: float = 1.01
 
+    # Registration
+    # "approved_only" is the default because docs/threat-model.md assumes a
+    # single-tenant internal deployment with no public registration -- a claim the
+    # code has to actually enforce. "open" restores self-service signup.
+    registration_mode: Literal["open", "approved_only"] = "approved_only"
+
+    # Demo
+    # Offers a one-click sign-in on the login screen using the seeded demo
+    # reviewer. Turn this off in any deployment holding real meetings -- it makes
+    # a known account one click away. The button is only shown when this is on
+    # AND the seeded account actually exists, so a fresh database never advertises
+    # a login that cannot work.
+    demo_mode: bool = True
+    demo_email: str = "reviewer@example.com"
+    demo_password: str = "reviewer-demo-password"
+
     # Privacy
     pii_scrubbing_enabled: bool = True
 

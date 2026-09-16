@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, clearSession, getStoredUser, getToken } from './api'
+import Admin from './views/Admin'
 import Audit from './views/Audit'
 import Governance from './views/Governance'
 import Login from './views/Login'
@@ -7,9 +8,12 @@ import Meetings from './views/Meetings'
 import { Badge } from './components/common'
 
 const TABS = [
-  ['meetings', 'Meetings'],
-  ['governance', 'Governance'],
-  ['audit', 'Audit trail'],
+  ['meetings', 'Meetings', null],
+  ['governance', 'Governance', null],
+  ['audit', 'Audit trail', null],
+  // Only an admin can manage the registration allow-list, so only an admin is
+  // shown the tab. The API enforces it regardless of what the UI renders.
+  ['admin', 'Admin', 'admin'],
 ]
 
 export default function App() {
@@ -43,7 +47,7 @@ export default function App() {
         <h1>Meeting Intelligence</h1>
         <span className="muted">human-governed minutes</span>
         <nav>
-          {TABS.map(([key, label]) => (
+          {TABS.filter(([, , role]) => !role || user.role === role).map(([key, label]) => (
             <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
               {label}
             </button>
@@ -60,6 +64,7 @@ export default function App() {
         {tab === 'meetings' && <Meetings />}
         {tab === 'governance' && <Governance />}
         {tab === 'audit' && <Audit />}
+        {tab === 'admin' && user.role === 'admin' && <Admin />}
       </main>
     </div>
   )

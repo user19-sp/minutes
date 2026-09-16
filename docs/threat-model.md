@@ -17,7 +17,11 @@ stops it, and names the test that proves it.
    error, or be socially engineered. They are not assumed malicious, but the
    system records what each one decided.
 3. **The deployment is single-tenant, internal.** No public registration, no
-   anonymous access.
+   anonymous access. This is now *enforced* rather than assumed: registration
+   requires an address an administrator has approved
+   (`backend/app/services/approvals.py`, `REGISTRATION_MODE=approved_only`).
+   Earlier revisions of this document asserted it while the code left
+   `/auth/register` open -- a gap found while reviewing this assumption.
 4. **The prototype runs in a trusted network.** TLS termination, WAF and network
    policy are deployment concerns; see [Residual risks](#residual-risks).
 
@@ -200,8 +204,16 @@ status for unknown-email and wrong-password, with a dummy hash computed on the
 unknown-email path so timing does not distinguish them; self-registration cannot
 grant `admin`; role re-read from the database on every request.
 
-**Residual:** **no rate limiting.** Online password guessing is currently possible.
-See [Residual risks](#residual-risks).
+**Registration is gated.** Only approved addresses may create an account; refusals
+are audited as `registration.refused`. A one-click demo sign-in exists for
+evaluation and is removed by `DEMO_MODE=false`; it uses the ordinary login path,
+so rate limiting and the role ladder apply to it unchanged.
+
+**Rate limiting penalises failures, not use.** A successful login or registration
+refunds the budget it consumed. An earlier revision charged for success, which
+locked out an admin onboarding several colleagues -- the limiter was punishing the
+people it exists to protect. Per-account budgets stay tight (5); per-IP and
+registration are wider because only failures accumulate there.
 
 **Tests:** `tests/security/test_malformed_input.py::test_alg_none_token_is_rejected`
 and neighbours; `test_login_does_not_reveal_whether_an_account_exists`.

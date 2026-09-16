@@ -30,6 +30,13 @@ from backend.app.security.auth import hash_password  # noqa: E402
 
 DEMO_TITLE = "Demo - Q3 planning standup"
 
+#: Seeded onto the registration allow-list so the "approved vs not approved"
+#: demo works on any machine without editing anything first.
+SEEDED_APPROVED_EMAILS = [
+    ("newjoiner@example.com", "Demo: an approved address that has not registered yet"),
+    ("auditor@partner.example.com", "Demo: an outside auditor, individually approved"),
+]
+
 DEMO_USERS = [
     ("reviewer@example.com", "reviewer-demo-password", Role.REVIEWER, "Demo Reviewer"),
     ("admin@example.com", "admin-demo-password", Role.ADMIN, "Demo Admin"),
@@ -84,6 +91,17 @@ def main() -> int:
         db.commit()
 
         reviewer = db.query(User).filter(User.email == DEMO_USERS[0][0]).one()
+        admin = db.query(User).filter(User.email == DEMO_USERS[1][0]).one()
+
+        # --- registration allow-list -------------------------------------- #
+        from backend.app.models import ApprovedEmail
+
+        approved_added = []
+        for email, note in SEEDED_APPROVED_EMAILS:
+            if db.query(ApprovedEmail).filter(ApprovedEmail.email == email).one_or_none() is None:
+                db.add(ApprovedEmail(email=email, note=note, added_by_id=admin.id))
+                approved_added.append(email)
+        db.commit()
 
         # --- clear any previous demo meeting ------------------------------ #
         for stale in db.query(Job).filter(Job.title == DEMO_TITLE).all():
@@ -146,6 +164,11 @@ def main() -> int:
         print("  Sign in as:")
         for email, password, role, _ in DEMO_USERS:
             print(f"    {role.value:9} {email:24} {password}")
+        print("\n  Approved to register (an admin can add more in the UI):")
+        for approved_email, _note in SEEDED_APPROVED_EMAILS:
+            print(f"    {approved_email}")
+        print("    any other address is refused until an admin approves it.")
+
         print(f"\n  Meeting:      {job.title}")
         print(f"  Job id:       {job.id}")
         print(f"  Run status:   {run.status.value}  ({run.tool_call_count} tool calls)")

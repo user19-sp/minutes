@@ -119,6 +119,31 @@ class User(Base):
     jobs: Mapped[list[Job]] = relationship(back_populates="owner")
 
 
+class ApprovedEmail(Base):
+    """An address an administrator has cleared to register.
+
+    The threat model assumes a single-tenant internal deployment with no public
+    registration. This table is what enforces that: without an entry here,
+    `POST /auth/register` refuses.
+
+    An explicit address list rather than a domain rule, deliberately. A domain
+    rule needs a company domain to demonstrate; a list can be administered live,
+    which makes the control visible rather than asserted.
+    """
+
+    __tablename__ = "approved_emails"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    note: Mapped[str | None] = mapped_column(String(255))
+
+    added_by_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    #: Stamped when someone actually registers with this address, so an admin can
+    #: see which invitations are outstanding.
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 # --------------------------------------------------------------------------- #
 # Pipeline data
 # --------------------------------------------------------------------------- #
@@ -295,6 +320,9 @@ class AgentRun(Base):
     """One orchestrator execution over one job."""
 
     __tablename__ = "agent_runs"
+    # The worker polls (status, queued_at) on every tick. Declared here as well as
+    # in the migration so autogenerate does not keep proposing to drop it.
+    __table_args__ = (Index("ix_agent_runs_status_queued_at", "status", "queued_at"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), index=True)

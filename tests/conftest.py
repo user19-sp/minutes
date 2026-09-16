@@ -136,6 +136,33 @@ def _make_user(email: str, password: str, role: Role) -> User:
 
 
 @pytest.fixture
+def approve_email():
+    """Put an address on the registration allow-list.
+
+    Registration defaults to approved-only, so any test that registers through the
+    API has to clear the address first -- which is the behaviour under test.
+    """
+
+    def _approve(email: str, note: str = "test") -> None:
+        from backend.app.models import ApprovedEmail
+
+        with SessionLocal() as session:
+            session.add(ApprovedEmail(email=email.lower(), note=note))
+            session.commit()
+
+    return _approve
+
+
+@pytest.fixture
+def open_registration(monkeypatch):
+    """Switch back to self-service signup for one test."""
+    from backend.app.config import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "registration_mode", "open")
+    yield
+
+
+@pytest.fixture
 def reviewer_factory():
     def _factory(role: Role = Role.REVIEWER, password: str = "correct-horse-battery"):
         email = f"{uuid.uuid4().hex[:10]}@example.com"

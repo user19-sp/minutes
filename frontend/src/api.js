@@ -82,6 +82,12 @@ export const api = {
   login: (email, password) => request('/auth/login', { method: 'POST', body: { email, password } }),
   register: (payload) => request('/auth/register', { method: 'POST', body: payload }),
   me: () => request('/auth/me'),
+  demoAvailability: () => request('/auth/demo'),
+  registrationPolicy: () => request('/auth/registration-policy'),
+  listApprovedEmails: () => request('/auth/approved-emails'),
+  approveEmail: (email, note) =>
+    request('/auth/approved-emails', { method: 'POST', body: { email, note } }),
+  revokeEmail: (id) => request(`/auth/approved-emails/${id}`, { method: 'DELETE' }),
 
   // --- jobs ---
   listJobs: () => request('/jobs'),

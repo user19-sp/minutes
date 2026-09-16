@@ -47,6 +47,21 @@ class UserOut(BaseModel):
     created_at: datetime
 
 
+class ApprovedEmailCreate(BaseModel):
+    email: EmailStr
+    note: str | None = Field(default=None, max_length=255)
+
+
+class ApprovedEmailOut(BaseModel):
+    model_config = ORM
+    id: str
+    email: str
+    note: str | None
+    added_by_id: str | None
+    added_at: datetime
+    used_at: datetime | None
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str

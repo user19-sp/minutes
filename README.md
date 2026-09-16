@@ -17,7 +17,7 @@ contracts in [`backend/app/ml/base.py`](backend/app/ml/base.py).
 
 | Half | State |
 |---|---|
-| **Person B** — platform, governance, DevOps | ✅ complete, CI green, 154 tests |
+| **Person B** — platform, governance, DevOps | ✅ complete, CI green, 177 tests |
 | **Person A** — STT, diarization, segmentation, extraction | ⬜ not yet integrated |
 | **Shared** — end-to-end integration testing | ⬜ blocked on Person A |
 
@@ -76,8 +76,15 @@ npm run dev
 
 ### Step 4 — open it
 
-**http://localhost:5173** — sign in as `reviewer@example.com` /
-`reviewer-demo-password` (also `admin@…` and `viewer@…`). Demo credentials only.
+**http://localhost:5173** — click **"Explore the demo →"**, or sign in with:
+
+| Role | Email | Password |
+|---|---|---|
+| reviewer | `reviewer@example.com` | `reviewer-demo-password` |
+| admin | `admin@example.com` | `admin-demo-password` |
+| viewer | `viewer@example.com` | `viewer-demo-password` |
+
+Demo credentials only; `seed_demo.py` never runs in a real deployment.
 
 You should see one meeting, *"Demo - Q3 planning standup"*, sitting at an amber
 approval gate.
@@ -91,7 +98,8 @@ approval gate.
 | `Activate.ps1 cannot be loaded` | Run `Set-ExecutionPolicy -Scope Process RemoteSigned` first. |
 | UI loads but every request fails | Terminal 1 died. The UI proxies to :8000. |
 | `port 8000 already in use` | An old server is still running. Close it, or use `--port 8001`. |
-| Login says *"Too many attempts"* | Rate limiter tripped. Wait 15 min, or restart the API to clear it. |
+| Login says *"Too many attempts"* | Repeated *failures* tripped the limiter. Successful attempts are refunded. Wait 15 min or restart the API. |
+| Register says *"not approved"* | Working as intended. Add the address in the Admin tab. |
 
 ### Docker (alternative — skips all of the above)
 
@@ -105,6 +113,27 @@ docker compose exec api python scripts/seed_demo.py
 Migrations run automatically. Compose refuses to start without a real
 `JWT_SECRET` — generate one with
 `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+
+---
+
+## Who can sign in
+
+**Registration is not open.** The threat model assumes a single-tenant internal
+deployment with no public signup, so the code enforces it: only addresses an
+administrator has approved may create an account.
+
+* **Admin → Admin tab** manages the allow-list. Add an address, and that person
+  can register; remove it, and they cannot. Removing an address does **not**
+  disable an account already created with it — deactivate the user for that.
+* Anyone else attempting to register gets *"That email address is not approved for
+  registration."* Refusals are audited (`registration.refused`).
+* **"Explore the demo →"** signs you into the seeded reviewer account without
+  registering. It only appears when that account exists, so a fresh database never
+  offers a login that cannot work. `DEMO_MODE=false` removes it entirely.
+* `REGISTRATION_MODE=open` restores self-service signup without emptying the list.
+
+Worth demonstrating, because it takes four clicks: register an unapproved address
+(refused) → approve it in the Admin tab → register again (works).
 
 ---
 
@@ -126,7 +155,7 @@ removed. Minutes appear instantly, no gate. That contrast is the comparison stud
 ## Testing
 
 ```bash
-pytest tests -q                       # 154 tests
+pytest tests -q                       # 177 tests
 ruff check . && ruff format --check . # lint
 bandit -r backend scripts -ll         # static analysis
 pip-audit -r requirements.txt         # dependency CVEs
@@ -213,9 +242,16 @@ storage, not at display time.
 All settings come from the environment — see [`.env.example`](.env.example).
 `.env` is gitignored and CI fails the build if one is ever committed.
 
-Worth knowing: `RUN_EXECUTION` (`inline` locally, `queued` in Docker),
-`AGENT_MAX_TOOL_CALLS` (runaway-agent ceiling), `AGENT_AUTO_APPROVE_THRESHOLD`
-(above 1.0 = nothing is ever auto-approved), `PII_SCRUBBING_ENABLED`.
+Worth knowing:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `REGISTRATION_MODE` | `approved_only` | `open` restores self-service signup |
+| `DEMO_MODE` | `true` | `false` removes the demo button entirely |
+| `RUN_EXECUTION` | `inline` | `queued` in Docker; a worker executes runs |
+| `AGENT_MAX_TOOL_CALLS` | `25` | Runaway-agent ceiling |
+| `AGENT_AUTO_APPROVE_THRESHOLD` | `1.01` | Above 1.0 = nothing is ever auto-approved |
+| `PII_SCRUBBING_ENABLED` | `true` | Scrubbing happens before storage |
 
 ## Licence
 

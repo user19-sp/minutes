@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import statistics
 import struct
 import sys
@@ -150,9 +151,33 @@ def wav_bytes(seconds: float = 0.5, rate: int = 8000) -> bytes:
     return header + data
 
 
-def ensure_user(base: str, email: str, password: str) -> str:
-    """Register (ignoring conflict) and return a bearer token."""
+ADMIN_EMAIL = os.getenv("MOM_ADMIN_EMAIL", "admin@example.com")
+ADMIN_PASSWORD = os.getenv("MOM_ADMIN_PASSWORD", "admin-demo-password")
+
+
+def _admin_token(base: str) -> str | None:
+    """Sign in as admin so generated load-test users can be approved.
+
+    Registration is approved-only by default, so this script has to clear each
+    address it invents. Returns None when there is no admin account, and the
+    caller then just registers -- which works if registration mode is "open".
+    """
     with httpx.Client(base_url=base, timeout=30) as client:
+        resp = client.post(
+            "/api/v1/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+        )
+        return resp.json()["access_token"] if resp.status_code == 200 else None
+
+
+def ensure_user(base: str, email: str, password: str, admin_token: str | None = None) -> str:
+    """Approve, register (ignoring conflict) and return a bearer token."""
+    with httpx.Client(base_url=base, timeout=30) as client:
+        if admin_token:
+            client.post(
+                "/api/v1/auth/approved-emails",
+                headers={"Authorization": f"Bearer {admin_token}"},
+                json={"email": email, "note": "load test"},
+            )
         client.post(
             "/api/v1/auth/register",
             json={"email": email, "password": password, "role": "reviewer"},
@@ -292,10 +317,11 @@ def run(base: str, scenario: str, users: int, requests: int) -> dict:
     print(f"  users     : {users} concurrent")
     print(f"  requests  : {requests} iterations each\n")
 
+    admin_token = _admin_token(base)
     tokens = []
     for _ in range(users):
         email = f"loadtest-{uuid.uuid4().hex[:10]}@example.com"
-        tokens.append(ensure_user(base, email, "load-test-password-123"))
+        tokens.append(ensure_user(base, email, "load-test-password-123", admin_token))
 
     errors: list[str] = []
 

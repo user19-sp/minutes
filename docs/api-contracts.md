@@ -56,10 +56,25 @@ never returned; the `trace_id` joins to the server log instead.
 | `POST` | `/auth/login` | Exchange credentials for a JWT |
 | `GET` | `/auth/me` | Current user |
 | `GET` | `/auth/users` | List accounts (admin only) |
+| `GET` | `/auth/demo` | Whether one-click demo sign-in is available |
+| `GET` | `/auth/registration-policy` | How registration is gated (public) |
+| `GET` | `/auth/approved-emails` | The registration allow-list (admin only) |
+| `POST` | `/auth/approved-emails` | Approve an address (admin only) |
+| `DELETE` | `/auth/approved-emails/{id}` | Withdraw approval (admin only) |
 
 Passwords are minimum 10 characters, maximum 72 bytes (bcrypt's limit — longer
 input is **rejected**, not silently truncated). `role: "admin"` in a registration
 request is downgraded to `reviewer`; only an existing admin can grant admin.
+
+**Registration requires approval.** `POST /auth/register` returns **403** unless
+the address is on the allow-list, which only an admin may edit. Withdrawing an
+approval stops future registrations; it does not disable an account already
+created with that address — deactivating a user is a separate, deliberate action.
+`REGISTRATION_MODE=open` bypasses the list entirely.
+
+`GET /auth/demo` tells the login screen whether to offer one-click sign-in. It
+reports unavailable when the seeded account does not exist, so a fresh database
+never advertises a login that would fail.
 
 Login returns the same status and message for an unknown email and a wrong
 password, and burns a dummy hash on the unknown-email path so response time does

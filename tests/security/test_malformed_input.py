@@ -280,7 +280,8 @@ def test_role_is_read_from_the_database_not_the_token(client, auth, db):
     assert client.get("/api/v1/audit", headers=headers).status_code == 403
 
 
-def test_self_registration_cannot_grant_admin(client):
+def test_self_registration_cannot_grant_admin(client, approve_email):
+    approve_email("escalate@example.com")
     resp = client.post(
         "/api/v1/auth/register",
         json={
