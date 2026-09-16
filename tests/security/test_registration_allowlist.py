@@ -186,6 +186,10 @@ def test_the_policy_endpoint_is_public_and_honest(client):
 
 
 def test_rate_limiting_still_applies_before_the_allow_list(client):
-    """An unapproved address must not be a free way to hammer the endpoint."""
-    statuses = [_register(client, f"probe{i}@example.com").status_code for i in range(7)]
-    assert 429 in statuses
+    """An unapproved address must not be a free way to hammer the endpoint.
+
+    The loop has to exceed the registration budget, which is deliberately wide
+    (only refusals accumulate, since successes are refunded).
+    """
+    statuses = [_register(client, f"probe{i}@example.com").status_code for i in range(25)]
+    assert 429 in statuses, "probing for approved addresses was not throttled"
